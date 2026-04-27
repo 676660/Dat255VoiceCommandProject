@@ -1,0 +1,71 @@
+import sounddevice as sd
+import numpy as np
+import tensorflow as tf
+
+# Loading the model that we saved
+model = tf.keras.models.load_model('best_model.keras')
+
+SAMPLE_RATE = 16000
+DURATION = 1
+chosen_commands = sorted(['down', 'up', 'left', 'right', '_silence_', '_unknown_'])
+
+# Making the same function for mel spectrogram
+def make_spectrogram(audio):
+    s = tf.signal.stft(audio, frame_length=256, frame_step=128)
+    s = tf.abs(s)
+    linear_to_mel = tf.signal.linear_to_mel_weight_matrix(
+        num_mel_bins=64,
+        num_spectrogram_bins=s.shape[-1],
+        sample_rate=16000,
+        lower_edge_hertz=20.0,
+        upper_edge_hertz=8000.0
+    )
+    mel = tf.tensordot(s, linear_to_mel, 1)
+    mel = tf.math.log(mel + 1e-6)
+    return tf.ensure_shape(mel[..., tf.newaxis], [124, 64, 1])
+
+# Recording and predicting
+def predict_from_mic(threshold=0.7):
+    print("Recording audio...")
+    audio = sd.rec(
+        int(DURATION * SAMPLE_RATE),
+        samplerate=SAMPLE_RATE,
+        channels=1,
+        dtype='float32'
+    )
+    sd.wait()
+    audio = audio.flatten()
+    
+    # Preprocess
+    audio_tf = tf.convert_to_tensor(audio, dtype=tf.float32)
+    audio_tf = audio_tf[:16000]
+    audio_tf = tf.pad(audio_tf, [[0, tf.maximum(0, 16000 - tf.shape(audio_tf)[0])]])
+    
+    # Spectrogram
+    spec = make_spectrogram(audio_tf)
+    spec_batch = spec[tf.newaxis, ...]
+    
+    # Predict
+    predictions = model(spec_batch, training=False)
+    probs = tf.nn.softmax(predictions)
+    predicted_class = tf.argmax(probs, axis=1).numpy()[0]
+    confidence = tf.reduce_max(probs).numpy()
+    command = chosen_commands[predicted_class]
+    
+    print(f"Predicted: {command} ({confidence:.1%} confidence)")
+    
+    if confidence < threshold:
+        return '_unknown_'
+    return command
+
+# Test loop
+while True:
+    input("Press Enter to record...")
+    result = predict_from_mic()
+    print(f"Result: {result}\n")
+
+
+
+
+
+    
