@@ -11,13 +11,13 @@ import pygame
 
 # Audio / model constants
 SAMPLE_RATE = 16000
-WINDOW_SAMPLES = 16000       # 1-second window fed to the model
-INFERENCE_INTERVAL = 0.25   # run inference every 250 ms
+WINDOW_SAMPLES = 16000       
+INFERENCE_INTERVAL = 0.25   
 CONFIDENCE_THRESHOLD = 0.80
 
 # Same sorted order used during training
 CHOSEN_COMMANDS = sorted(['down', 'up', 'left', 'right', '_silence_', '_unknown_'])
-# Result: ['_silence_', '_unknown_', 'down', 'left', 'right', 'up']
+
 
 MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'best_model.keras')
 
@@ -76,7 +76,7 @@ def _inference_loop(model):
 CELL = 28
 COLS, ROWS = 22, 22
 WIN_W = CELL * COLS
-WIN_H = CELL * ROWS + 80   # 80 px HUD strip at the bottom
+WIN_H = CELL * ROWS + 80   
 
 BG_COLOR     = (15,  15,  25)
 GRID_COLOR   = (30,  30,  45)
@@ -112,9 +112,10 @@ CMD_ARROWS = {
     '_silence_': '~',
     '_unknown_': '?',
 }
-
-BASE_SPEED = 500   # ms between snake moves at start
-MIN_SPEED  = 300   # ms between moves at max difficulty
+# ms between snake moves at start
+BASE_SPEED = 500 
+# ms between moves at max difficulty  
+MIN_SPEED  = 300   
 
 
 def _new_food(snake: list) -> tuple:
@@ -259,7 +260,7 @@ def main():
         samplerate=SAMPLE_RATE,
         channels=1,
         dtype='float32',
-        blocksize=1600,        # 0.1-second chunks → low latency
+        blocksize=1600,       
         callback=_audio_callback,
     )
     stream.start()

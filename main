@@ -24,25 +24,17 @@ AUTOTUNE = tf.data.AUTOTUNE
     with_info=True,
 )
 ds_info = tfds.builder("speech_commands").info
-#Printing out information on dataset
-#print(ds_info)
+
 
 
 #All the lables in the dataset
 label_names = ds_info.features["label"].names
 print(label_names)
-#Checking audio scale, datatype and shape of audio to see if it needs any normliztion or casting
-#print("audio in the beggining")
-#for audio, label in train_ds_raw.take(3):
-#    print("min:", tf.reduce_min(audio).numpy())
- #   print("max:", tf.reduce_max(audio).numpy())
- #   print("datatype:", audio.dtype,"shape", audio.shape)
- #   print(audio)
 
 #We need only the commands that we need for our snake game + unknown and silence
 chosen_commands = sorted(['down', 'up', 'left', 'right', '_silence_', '_unknown_'])
 num_labels   = len(chosen_commands)
-#We give them new ids becasue they are already numerical catagorial and have numbers from 0 to 11
+#We give them new ids becasue they are already numerical  and have numbers from 0 to 11
 #so they get new ids from 0 to 5
 commands_ids = [label_names.index(w) for w in chosen_commands]
 id_remap     = {orig: new for new, orig in enumerate(commands_ids)}
@@ -69,14 +61,6 @@ train_ds = train_ds_raw.filter(filter_commands).map(remap_label)
 val_ds   = val_ds_raw.filter(filter_commands).map(remap_label)
 test_ds  = test_ds_raw.filter(filter_commands).map(remap_label)
 
-#Testing to see if it worked and they hold only the commands that we want
-#print("testing lables in training, validation and test dataset")
-#for audio, label in train_ds.take(5):
- #      print(chosen_commands[label.numpy()]) 
-#for audio, label in val_ds.take(5):
- #      print(chosen_commands[label.numpy()]) 
-#for audio, label in test_ds.take(5):
- #      print(chosen_commands[label.numpy()]) 
 
 
 
@@ -87,7 +71,7 @@ split = int(66880  * 0.25)
 train_clean     = train_ds.take(split)
 train_augmented = train_ds.skip(split)
 
-#Making a function for casting and normlizing audio samples
+#Making a function for converting and normlizing audio samples
 #making the type to float32 and making the scale of audio to be between -1 and 1
 #we also pad and trim any audios over 1 second or under one second
 def preprocess(audio, label):
@@ -114,18 +98,13 @@ def preprocess_augmented(audio, label):
         lambda: tf.concat([audio[-shift:], tf.zeros([-shift])], axis=0))
     
     return audio, label
+
 #Applying the function (we make a clean and augumneted version of training data)
 train_ds_pros_clean=train_clean.map(preprocess , num_parallel_calls=AUTOTUNE)
 train_ds_pros_aug=train_augmented.map(preprocess_augmented , num_parallel_calls=AUTOTUNE)
 val_ds_pros=val_ds.map(preprocess, num_parallel_calls=AUTOTUNE)
 test_ds_pros=test_ds.map(preprocess, num_parallel_calls=AUTOTUNE)
-#Checking audio scale and its datatype after preprocessing
-#print("audio after preprocessing")
-#for audio, label in train_ds_pros_aug.take(3):
-#    print("min:", tf.reduce_min(audio).numpy())
- #   print("max:", tf.reduce_max(audio).numpy())
- #   print("datatype:", audio.dtype,"shape", audio.shape)
- #   print(audio)
+
 
 
 #Making a function that first turns audio waves to spectrgram and then to mel spectrgram
@@ -169,44 +148,8 @@ train_ds_spec_clean = train_ds_pros_clean.map(make_spectrogram, num_parallel_cal
 train_ds_spec_aug = train_ds_pros_aug.map(make_spectrogram, num_parallel_calls=AUTOTUNE).map(spec_augment, num_parallel_calls=AUTOTUNE)
 #then. we mix both togther 
 train_ds_spec = train_ds_spec_clean.concatenate(train_ds_spec_aug)
-#for spec, label in train_ds_spec.take(1):
- #   print(spec.shape)  
 val_ds_spec   = val_ds_pros.map(make_spectrogram, num_parallel_calls=AUTOTUNE)
 test_ds_spec  = test_ds_pros.map(make_spectrogram, num_parallel_calls=AUTOTUNE)
-
-
-
-
-
-
-
-
-#Visualising the wave audio and mel spectrogram
-#for raw_audio, label in val_ds_raw.filter(filter_commands).map(remap_label).take(1):
-#    label_name = chosen_commands[label.numpy()]
-#audio, _ = preprocess(raw_audio, label)
-#mel_spec, _ = make_spectrogram(audio, label)
-#fig, axes = plt.subplots(2, 1, figsize=(12, 8))
-#Plotting the audio wave
-#axes[0].plot(audio.numpy())
-#axes[0].set_title(f'Raw Audio Waveform — Label: {label_name}')
-#axes[0].set_xlabel('Sample')
-#axes[0].set_ylabel('Amplitude')
-#axes[0].grid(True)
-#Plotting the mel spectrogram
-#img = axes[1].imshow(
- #   mel_spec.numpy()[:, :, 0].T,
-  #  aspect='auto',
-  #  origin='lower',
-  #  cmap='viridis'
-#)
-#axes[1].set_title(f'Mel Spectrogram — Label: {label_name}')
-#axes[1].set_xlabel('Time frames')
-#axes[1].set_ylabel('Mel frequency bins')
-#plt.colorbar(img, ax=axes[1], label='Log magnitude')
-#plt.tight_layout()
-#plt.show()
-
 
 
 
@@ -219,9 +162,7 @@ test_ds_batched  = test_ds_spec.batch(64).prefetch(AUTOTUNE)
 
 
 
-
-
-#We inspect our datasets and see there is a big unblance between uknown and other
+#We inspect our datasets and see there is a big unblance between unknown and other
 #classes ,if a model has so much more of a class it will learn to always predict that
 #class because its going to be right most of the time and therefor we calculate class 
 #weights from TRAIN counts to make the bigger class less important and smaller class more important
@@ -255,18 +196,20 @@ normal_layer.adapt(
     .map(make_spectrogram, num_parallel_calls=AUTOTUNE)
     .map(lambda s, l: s)
 )
+
 #Building our CNN model 
+#(This was inspired by Simple audio recognition :https://www.tensorflow.org/tutorials/audio/simple_audio)
 model = tf.keras.Sequential([
     tf.keras.layers.Input(shape=(124, 64, 1)),
     tf.keras.layers.Resizing(32, 32),
     normal_layer,
-    tf.keras.layers.Conv2D(32, 3, activation='relu'),
-    tf.keras.layers.Conv2D(64, 3, activation='relu'),
+    tf.keras.layers.Conv2D(32, 3, activation='relu'),                   
+    tf.keras.layers.Conv2D(64, 3, activation='relu'),     
     tf.keras.layers.Conv2D(128, 3, activation='relu'),
-    tf.keras.layers.MaxPooling2D(),
+    tf.keras.layers.MaxPooling2D(), 
     tf.keras.layers.Dropout(0.2),
-    tf.keras.layers.Flatten(),
-    tf.keras.layers.Dense(256, activation='relu'), 
+    tf.keras.layers.Flatten(),                        
+    tf.keras.layers.Dense(258, activation='relu'),
     tf.keras.layers.Dropout(0.3),
     tf.keras.layers.Dense(num_labels),
 ])
@@ -294,56 +237,12 @@ history = model.fit(
     callbacks=[
         tf.keras.callbacks.EarlyStopping(patience=3, restore_best_weights=True, verbose=1),
         tf.keras.callbacks.ReduceLROnPlateau(patience=2, factor=0.5, verbose=1),
-        tf.keras.callbacks.ModelCheckpoint(filepath='best_model.keras', monitor='val_accuracy',save_best_only=True, mode='max',verbose=1)
+        tf.keras.callbacks.ModelCheckpoint(filepath='best_model4.keras', monitor='val_accuracy',save_best_only=True, mode='max',verbose=1)
     ],
 )
 #Saving the best model
 best_model = tf.keras.models.load_model('best_model.keras')
 print("Best model loaded!")
-
-#Plotting accuracy and loss for training and validation set 
-#def plot_training_history(history):
-#    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-#    
-#    axes[0].plot(history.history['accuracy'], label='Train', marker='o')
- #   axes[0].plot(history.history['val_accuracy'], label='Validation', marker='o')
- #   axes[0].set_title('Model Accuracy')
- #   axes[0].set_xlabel('Epoch')
- #   axes[0].set_ylabel('Accuracy')
- #   axes[0].legend()
- #   axes[0].grid(True)
-    
- #   axes[1].plot(history.history['loss'], label='Train', marker='o')
- #   axes[1].plot(history.history['val_loss'], label='Validation', marker='o')
- #   axes[1].set_title('Model Loss')
- #   axes[1].set_xlabel('Epoch')
-  #  axes[1].set_ylabel('Loss')
-  #  axes[1].legend()
-  #  axes[1].grid(True)
-    
- #   plt.tight_layout()
- #   plt.savefig('training_curves.png')
- #   plt.show()
-#plot_training_history(history)
-
-
-
-#Plotting the Confusion matrix for validation set
-#cm = confusion_matrix(y_true, y_pred)
-#plt.figure(figsize=(10, 8))
-#plt.imshow(cm, cmap='Blues')
-#plt.title('Confusion Matrix — Validation Set')
-#plt.xlabel('Predicted')
-#plt.ylabel('True')
-#plt.xticks(range(len(chosen_commands)), chosen_commands, rotation=45)
-#plt.yticks(range(len(chosen_commands)), chosen_commands)
-#plt.colorbar()
-#for i in range(len(chosen_commands)):
-#    for j in range(len(chosen_commands)):
- #       color = 'white' if cm[i, j] > cm.max() / 2 else 'black'
- #       plt.text(j, i, cm[i, j], ha='center', va='center', color=color)
-#plt.tight_layout()
-#plt.show()
 
 
 
@@ -370,7 +269,6 @@ y_probs_test = np.array(y_probs_test)
 print(classification_report(y_true_test, y_pred_test, target_names=chosen_commands))
 
 
-
 #Test set confusion matrix
 cm = confusion_matrix(y_true_test, y_pred_test)
 plt.figure(figsize=(10, 8))
@@ -387,23 +285,11 @@ for i in range(len(chosen_commands)):
         plt.text(j, i, cm[i, j], ha='center', va='center', color=color)
 plt.tight_layout()
 plt.show()
-#Test set ROC curve 
-y_true_bin = label_binarize(y_true_test, classes=list(range(num_labels)))
-plt.figure(figsize=(10, 8))
-for i, cmd in enumerate(chosen_commands):
-    fpr, tpr, _ = roc_curve(y_true_bin[:, i], y_probs_test[:, i])
-    roc_auc = auc(fpr, tpr)
-    plt.plot(fpr, tpr, label=f'{cmd} (AUC = {roc_auc:.2f})')
-plt.plot([0, 1], [0, 1], 'k--', label='Random (AUC = 0.50)')
-plt.xlabel('False Positive Rate')
-plt.ylabel('True Positive Rate')
-plt.title('ROC Curve — Test Set')
-plt.legend()
-plt.grid(True)
-plt.show()
 
 
-# Evaluating Inference time on test set whcih is important for us becasue we need fast response in our snake game
+
+
+# Evaluating Inference time on test set whcih is important for us becasue we need fast response for our snake game
 single_sample = next(iter(test_ds_batched))[0][0:1]
 for _ in range(10):
     model(single_sample, training=False)
